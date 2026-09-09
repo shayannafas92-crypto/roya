@@ -1,0 +1,56 @@
+name: Build Emberfall Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK
+        run: |
+          sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Find and extract game.zip
+        run: |
+          unzip -q game.zip -d extracted
+          echo "Contents:"
+          find extracted -maxdepth 4 -type f | head -100
+
+      - name: Find Android project
+        run: |
+          ANDROID_DIR=$(find extracted -type f -name "settings.gradle" -o -name "settings.gradle.kts" | head -1 | xargs -r dirname)
+          if [ -z "$ANDROID_DIR" ]; then
+            echo "Android project not found"
+            exit 1
+          fi
+          echo "ANDROID_DIR=$ANDROID_DIR" >> "$GITHUB_ENV"
+
+      - name: Make Gradle executable
+        run: chmod +x "$ANDROID_DIR/gradlew"
+
+      - name: Build APK
+        working-directory: ${{ env.ANDROID_DIR }}
+        run: ./gradlew --no-daemon :app:assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: emberfall-app-debug
+          path: ${{ env.ANDROID_DIR }}/app/build/outputs/apk/debug/app-debug.apk
